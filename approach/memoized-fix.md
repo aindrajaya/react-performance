@@ -8,6 +8,10 @@ The "memoized fix" is a performance optimization technique that uses React's bui
 
 While maintaining the same "bad structure" (state at the top level), memoization prevents components from re-rendering when their props haven't actually changed. This reduces the cascade effect without requiring architectural changes.
 
+## Addressing the Megaphone Effect
+
+While the bad structure uses React State/Context as a "megaphone" broadcasting updates to all components (as discussed in the bad structure pattern), memoization acts as noise-canceling headphones. Components wrapped with `React.memo` can now "tune out" the broadcast when their specific props haven't changed, preventing unnecessary re-renders. This approach mitigates the inefficiency of the top-down render cascade by allowing components to selectively ignore irrelevant updates.
+
 ## Core Concepts
 
 ### React.memo
