@@ -1,6 +1,8 @@
 import React, { useState, useCallback, memo } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useSelector } from '../../hooks/useSelector';
+import { setState } from '../../store';
 
 /**
  * A simple helper component that logs to the console and displays a timestamp
@@ -189,6 +191,61 @@ const GoodApp = () => {
   );
 };
 
+// --- Version 4: "Selective" Re-rendering ---
+// Using a store with selectors to only re-render when selected state changes.
+
+const CartBadge = () => (
+  <div className="relative bg-blue-600 text-white p-4 rounded-lg shadow-md group">
+    <ShowRender name="CartBadge" />
+    <span className="text-lg font-bold">Cart: {useSelector(state => state.cart.items).length} items</span>
+  </div>
+);
+
+const UserDisplay = () => (
+  <div className="relative bg-purple-600 text-white p-4 rounded-lg shadow-md group">
+    <ShowRender name="UserDisplay" />
+    <span className="text-lg font-bold">User: {useSelector(state => state.user.name)}</span>
+  </div>
+);
+
+const SelectiveApp = () => {
+  const addToCart = () => {
+    setState(state => ({
+      ...state,
+      cart: { items: [...state.cart.items, `item${state.cart.items.length + 1}`] }
+    }));
+  };
+
+  const updateUserName = (name) => {
+    setState(state => ({
+      ...state,
+      user: { name }
+    }));
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 rounded-lg bg-gray-800 shadow-xl">
+      <ShowRender name="SelectiveApp (Root)" />
+      <div className="col-span-2 flex gap-4 mb-4">
+        <button
+          onClick={addToCart}
+          className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md shadow transition-transform transform hover:scale-105"
+        >
+          Add to Cart
+        </button>
+        <button
+          onClick={() => updateUserName(`User${Math.floor(Math.random() * 100)}`)}
+          className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-md shadow transition-transform transform hover:scale-105"
+        >
+          Update User Name
+        </button>
+      </div>
+      <CartBadge />
+      <UserDisplay />
+    </div>
+  );
+};
+
 
 // --- Main App to switch between demos ---
 
@@ -219,6 +276,14 @@ export default function Performance() {
       borderColor: 'border-green-600',
       textColor: 'text-green-200',
       explanation: "This is the simple, architectural fix. We moved the 'search' state *into* the 'GoodHeader' component (colocation). When you type, only 'GoodHeader' re-renders. The root app and its other children (Sidebar, etc.) don't even know a re-render happened. The code is simpler and just as fast.",
+    },
+    selective: {
+      component: <SelectiveApp />,
+      label: '4. "Selective" Re-rendering',
+      color: 'bg-purple-700',
+      borderColor: 'border-purple-600',
+      textColor: 'text-purple-200',
+      explanation: "This demonstrates selective re-rendering with a store and selectors. CartBadge only re-renders when cart.items changes. UserDisplay only re-renders when user.name changes. Click the buttons and watch only the relevant components update.",
     },
   };
   
