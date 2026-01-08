@@ -27,6 +27,14 @@ const Navbar = () => {
               Performance
             </Link>
           </li>
+          <li>
+            <Link
+              to="/workorders"
+              className="hover:text-gray-200 transition-colors px-3 py-2 rounded-md hover:bg-white hover:bg-opacity-10"
+            >
+              Work Orders
+            </Link>
+          </li>
         </ul>
       </div>
     </nav>
