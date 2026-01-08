@@ -1,4 +1,4 @@
-import { useState, useTransition, memo, useEffect, useRef } from 'react';
+import { useState, useTransition, memo, useEffect, useRef, useCallback, useMemo } from 'react';
 import { List } from 'react-window';
 import { filterWorkOrders, filterWorkOrdersAdvanced, STATUSES, PRIORITIES, DEPARTMENTS } from '../utils/mockData';
 import { fetchWorkOrders } from '../services/workOrdersApi';
@@ -134,7 +134,7 @@ function WorkOrdersPage() {
     return () => abortController.abort();
   }, []);
   
-  // Performance metrics
+  // Performance metrics - FIXED: No effect that causes re-render loop
   const [metrics, setMetrics] = useState({
     filterTime: 0,
     renderCount: 0,
@@ -143,14 +143,16 @@ function WorkOrdersPage() {
   const renderCountRef = useRef(0);
   const lastInputTimeRef = useRef(0);
   
-  // Track render count
-  useEffect(() => {
-    renderCountRef.current += 1;
-    setMetrics(prev => ({ ...prev, renderCount: renderCountRef.current }));
-  });
+  // Increment render count WITHOUT triggering re-renders
+  renderCountRef.current += 1;
   
-  // Handle search with useTransition
-  const handleSearch = (value) => {
+  // Update displayed render count only on mount (empty dependency array)
+  useEffect(() => {
+    setMetrics(prev => ({ ...prev, renderCount: renderCountRef.current }));
+  }, []);
+  
+  // Handle search with useTransition - wrapped in useCallback
+  const handleSearch = useCallback((value) => {
     const inputTime = performance.now();
     const latency = lastInputTimeRef.current ? inputTime - lastInputTimeRef.current : 0;
     lastInputTimeRef.current = inputTime;
@@ -179,10 +181,10 @@ function WorkOrdersPage() {
       setFilteredResults(filtered);
       setMetrics(prev => ({ ...prev, filterTime }));
     }
-  };
+  }, [useOptimizations, allWorkOrders]);
   
-  // Handle advanced filters
-  const handleAdvancedFilter = () => {
+  // Handle advanced filters - wrapped in useCallback
+  const handleAdvancedFilter = useCallback(() => {
     const filters = {
       status: statusFilter,
       priority: priorityFilter,
@@ -205,13 +207,13 @@ function WorkOrdersPage() {
       setFilteredResults(filtered);
       setMetrics(prev => ({ ...prev, filterTime }));
     });
-  };
+  }, [statusFilter, priorityFilter, departmentFilter, searchTerm, allWorkOrders]);
   
-  // Retry function for error handling
-  const handleRetry = () => {
+  // Retry function for error handling - wrapped in useCallback
+  const handleRetry = useCallback(() => {
     setError(null);
     window.location.reload();
-  };
+  }, []);
   
   // Apply advanced filters when they change
   useEffect(() => {
@@ -226,14 +228,14 @@ function WorkOrdersPage() {
     }
   }, [statusFilter, priorityFilter, departmentFilter, allWorkOrders]);
   
-  // Reset filters
-  const handleReset = () => {
+  // Reset filters - wrapped in useCallback
+  const handleReset = useCallback(() => {
     setSearchTerm('');
     setStatusFilter('All');
     setPriorityFilter('All');
     setDepartmentFilter('All');
     setFilteredResults(allWorkOrders);
-  };
+  }, [allWorkOrders]);
   
   // Loading state
   if (isLoading) {
