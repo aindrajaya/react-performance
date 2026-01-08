@@ -1,7 +1,9 @@
-import { useState, useTransition, useMemo, memo, useEffect, useRef } from 'react';
+import { useState, useTransition, memo, useEffect, useRef } from 'react';
 import { List } from 'react-window';
-import { generateWorkOrders, filterWorkOrders, filterWorkOrdersAdvanced, STATUSES, PRIORITIES, DEPARTMENTS } from '../utils/mockData';
+import { filterWorkOrders, filterWorkOrdersAdvanced, STATUSES, PRIORITIES, DEPARTMENTS } from '../utils/mockData';
+import { fetchWorkOrders } from '../services/workOrdersApi';
 import Performance from '../components/Performance';
+import WorkOrderSkeleton from '../components/WorkOrderSkeleton';
 
 // Color coding constants (moved outside component to avoid recreation)
 const priorityColors = {
@@ -78,13 +80,14 @@ const WorkOrderRow = memo(({ index, style, items }) => {
 WorkOrderRow.displayName = 'WorkOrderRow';
 
 function WorkOrdersPage() {
-  // Generate 50k work orders once on mount
-  const allWorkOrders = useMemo(() => generateWorkOrders(50000), []);
-  
   // State management
+  const [allWorkOrders, setAllWorkOrders] = useState([]);
+  const [filteredResults, setFilteredResults] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filteredResults, setFilteredResults] = useState(allWorkOrders);
   const [isPending, startTransition] = useTransition();
+  const [dataSource, setDataSource] = useState(null);
   
   // Advanced filters
   const [statusFilter, setStatusFilter] = useState('All');
@@ -94,6 +97,42 @@ function WorkOrdersPage() {
   // Demo mode toggle
   const [useOptimizations, setUseOptimizations] = useState(true);
   const [useVirtualization, setUseVirtualization] = useState(true);
+  
+  // Fetch data from API
+  useEffect(() => {
+    const abortController = new AbortController();
+    
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const result = await fetchWorkOrders({ 
+          signal: abortController.signal 
+        });
+        
+        setAllWorkOrders(result.data);
+        setFilteredResults(result.data);
+        setDataSource(result.source);
+        
+        // Show warning if using mock data
+        if (result.source === 'mock' && result.error) {
+          console.warn(`API failed: ${result.error}. Using mock data for demo.`);
+        }
+      } catch (err) {
+        if (err.message !== 'Request was cancelled') {
+          console.error('Error loading data:', err);
+          setError(err.message);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    loadData();
+    
+    return () => abortController.abort();
+  }, []);
   
   // Performance metrics
   const [metrics, setMetrics] = useState({
@@ -168,8 +207,16 @@ function WorkOrdersPage() {
     });
   };
   
+  // Retry function for error handling
+  const handleRetry = () => {
+    setError(null);
+    window.location.reload();
+  };
+  
   // Apply advanced filters when they change
   useEffect(() => {
+    if (allWorkOrders.length === 0) return;
+    
     if (statusFilter !== 'All' || priorityFilter !== 'All' || departmentFilter !== 'All') {
       handleAdvancedFilter();
     } else if (searchTerm) {
@@ -177,7 +224,7 @@ function WorkOrdersPage() {
     } else {
       setFilteredResults(allWorkOrders);
     }
-  }, [statusFilter, priorityFilter, departmentFilter]);
+  }, [statusFilter, priorityFilter, departmentFilter, allWorkOrders]);
   
   // Reset filters
   const handleReset = () => {
@@ -187,6 +234,92 @@ function WorkOrdersPage() {
     setDepartmentFilter('All');
     setFilteredResults(allWorkOrders);
   };
+  
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white p-8">
+        <Performance name="WorkOrdersPage-Loading" />
+        <div className="max-w-[1600px] mx-auto">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent mb-2">
+              High-Performance Data Table
+            </h1>
+            <p className="text-gray-400">
+              Loading work orders from API...
+            </p>
+          </div>
+          
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <div>
+                <div className="text-lg font-semibold">Fetching data from API...</div>
+                <div className="text-sm text-gray-400">Please wait while we load the work orders</div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Table Header */}
+          <div className="bg-gray-800 rounded-t-lg border border-gray-700 border-b-0">
+            <div className="flex items-center px-6 py-3 font-semibold text-sm text-gray-400">
+              <div className="w-32">ID</div>
+              <div className="w-24">Priority</div>
+              <div className="flex-1 px-4">Title & Description</div>
+              <div className="w-40">Assignee</div>
+              <div className="w-32">Department</div>
+              <div className="w-32">Status</div>
+              <div className="w-32">Created</div>
+            </div>
+          </div>
+          
+          {/* Skeleton Rows */}
+          <div className="bg-gray-800 rounded-b-lg border border-gray-700 border-t-0">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <WorkOrderSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white p-8">
+        <Performance name="WorkOrdersPage-Error" />
+        <div className="max-w-[1600px] mx-auto">
+          <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-8 text-center">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-bold text-yellow-400 mb-2">API Connection Issue</h2>
+            <p className="text-gray-300 mb-6">{error}</p>
+            <p className="text-gray-400 mb-6">The system is loading demo data with 50k sample work orders to showcase the performance optimizations.</p>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => {
+                  setError(null);
+                  setIsLoading(true);
+                  window.location.reload();
+                }}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all"
+              >
+                🔄 Retry API
+              </button>
+              <a
+                href="https://extra-aubry-chainx-d938c098.koyeb.app/workorders"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-all"
+              >
+                🔗 Check API Status
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
@@ -200,7 +333,16 @@ function WorkOrdersPage() {
               High-Performance Data Table
             </h1>
             <p className="text-gray-400">
-              50,000 work orders with instant filtering using React Concurrent Features & Virtualization
+              {allWorkOrders.length.toLocaleString()} work orders with instant filtering using React Concurrent Features & Virtualization
+              {dataSource && (
+                <span className={`ml-4 inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                  dataSource === 'api' 
+                    ? 'bg-green-900/50 text-green-400 border border-green-700' 
+                    : 'bg-blue-900/50 text-blue-400 border border-blue-700'
+                }`}>
+                  {dataSource === 'api' ? '✓ Live API Data' : '📊 Demo Mock Data'}
+                </span>
+              )}
             </p>
           </div>
           
